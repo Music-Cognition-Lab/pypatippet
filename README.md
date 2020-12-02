@@ -5,6 +5,7 @@ See Jonathan Cannon's reference implementation in MATLAB: https://github.com/jon
 
 Notes:
 - **Warning:** this has _not_ been thoroughly tested, use at your own risk!
+- This has been tested using python v3.8.1, see `requirements.txt`.
 - Currently only a single event stream is supported. It should be trivial to extend this to multiple event streams.
 
 Please feel free to raise a pull request, additional utilities would be much appreciated.
