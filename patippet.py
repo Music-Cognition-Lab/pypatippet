@@ -1,5 +1,5 @@
 '''
-PATIPPET: Phase (And Tempo) Inference from Point Process Event Timing [1]
+P(AT)IPPET: Phase (And Tempo) Inference from Point Process Event Timing [1]
 
 [1] Cannon, Jonathan Joseph. "PIPPET: A Bayesian framework for generalized entrainment
 to stochastic rhythms." bioRxiv (2020).
@@ -27,7 +27,7 @@ import numpy as np
 from scipy.stats import norm
 
 @attr.s
-class PATIPPETParams(object):
+class PIPPETParams(object):
     ''' Parameter wrapper, struct-like '''
     e_means = attr.ib()
     e_vars = attr.ib()
@@ -36,40 +36,137 @@ class PATIPPETParams(object):
     lambda_0 = attr.ib()
     dt = attr.ib()
     sigma_phase = attr.ib()
-    sigma_tempo = attr.ib()
-    xbar0 = attr.ib(default=[0,1])
-    Sigma0 = attr.ib(default=np.array([[0.0001, 0], [0, 0.04]]))
+    mean0 = attr.ib(default=0)
+    var0 = attr.ib(default=0.0002)
     overtime = attr.ib(default=0.0)
 
-class PATIPPET(object):
-    ''' Phase (And Tempo) Inference from Point Process Event Timing '''
+    def __attrs_post_init__(self):
+        self.N = len(self.e_means)
+
+
+class PIPPET(object):
+    ''' Phase Inference from Point Process Event Timing '''
 
     def __init__(self, params, drift=True):
-        ''' Create a new agent given a parameter set
-
-        :param params: configuration for agent (PATIPPETParams)
-        :param drift: update sufficient stats between events (bool, default=True)
-        '''
         self.p = params
         self._drift_between = drift
         self.prepare()
 
-    def prepare(self):
+    def prepare(self, clear_state=True):
         ''' Initialise agent based on current parameter set '''
         self.t_max = max(self.p.e_times) + self.p.overtime
         self.ts = np.arange(0, self.t_max+self.p.dt, step=self.p.dt)
         self.n_ts = self.ts.shape[0]
 
         # Sufficient statistics
-        self.xbar_s = np.zeros((2, self.n_ts))
-        self.xbar_s[:,0] = self.p.xbar0
-        self.Sigma_s = np.zeros((2, 2, self.n_ts))
-        self.Sigma_s[:,:,0] = self.p.Sigma0
+        if clear_state:
+            self.phibar_s = np.zeros(self.n_ts)
+            self.phibar_s[0] = self.p.mean0
+            self.V_s = np.zeros(self.n_ts)
+            self.V_s[0] = self.p.var0
 
         # Event onsets (within self.ts), once detected
         self.i_s = []
         # Expected event onsets (within self.ts)
         self.i_es = []
+
+    def _is_onset(self, t_prev, t, i=0, stimulus=True):
+        ''' Check whether event occurs between two timesteps
+
+        :param t_prev: beginning of window, exclusive (float)
+        :param t: end of window, inclusive (float)
+        :param i: search from this index in event sequence (int, default=0)
+        :param stimulus: check stimulus, else expected means (bool, defult=True)
+        '''
+        es = self.p.e_times if stimulus else self.p.e_means
+        for e_i in range(i, len(es)):
+            e_t = es[e_i]
+            if t >= e_t and t_prev < e_t:
+                return True
+        return False
+
+    def _phibar_i(self, phibar, V):
+        return (phibar/V + self.p.e_means/self.p.e_vars)/(1/V + 1/self.p.e_vars)
+
+    def _K_i(self, V):
+        return 1/(1/V + 1/self.p.e_vars)
+
+    def _lambda_i(self, phibar, V):
+        gauss = norm.pdf(phibar, loc=self.p.e_means, scale=(self.p.e_vars + V)**0.5)
+        return self.p.e_lambdas * gauss
+
+    def _lambda_hat(self, phibar, V):
+        return self.p.lambda_0 + np.sum(self._lambda_i(phibar, V))
+
+    def _phi_hat(self, phibar, V):
+        phi_hat = self.p.lambda_0 * phibar
+        phi_hat += np.sum(self._lambda_i(phibar, V) * self._phibar_i(phibar, V))
+        return phi_hat / self._lambda_hat(phibar, V)
+
+    def _V_hat(self, phibar_curr, phibar_prev, V):
+        V_hat = self.p.lambda_0 * (V + (phibar_prev-phibar_curr)**2)
+        a = self._lambda_i(phibar_prev, V)
+        b = self._K_i(V) + (self._phibar_i(phibar_prev, V)-phibar_curr)**2
+        V_hat += np.sum(a * b)
+        return V_hat / self._lambda_hat(phibar_prev, V)
+
+    def run(self):
+        ''' Run PIPPET over timeline/events configured in parameter set '''
+        e_i = 0
+        for i in range(1, self.n_ts):
+            phibar_prev = self.phibar_s[i-1]
+            V_prev = self.V_s[i-1]
+
+            # Drift between events
+            dphibar = 0
+            if self._drift_between:
+                dphibar = self._lambda_hat(phibar_prev, V_prev)
+                dphibar *= (self._phi_hat(phibar_prev, V_prev) - phibar_prev)
+            phibar = phibar_prev + self.p.dt * (1 - dphibar)
+
+            dV = 0
+            if self._drift_between:
+                dV = self._lambda_hat(phibar_prev, V_prev)
+                dV *= (self._V_hat(phibar, phibar_prev, V_prev) - V_prev)
+            C = V_prev + self.p.dt * (self.p.sigma_phase**2 - dV)
+
+            # If event, update accordingly
+            t_prev, t = self.ts[i-1], self.ts[i]
+            if self._is_onset(t_prev, t, e_i):
+                phibar_new = self._phi_hat(phibar, C)
+                C = self._V_hat(phibar_new, phibar, C)
+                phibar = phibar_new
+                e_i += 1
+                self.i_s.append(i)
+
+            # Note index of expected event (e.g. subdivision)
+            if self._is_onset(t_prev, t, stimulus=False):
+                self.i_es.append(i)
+
+            self.V_s[i] = C
+            self.phibar_s[ i] = phibar
+
+
+@attr.s
+class PATIPPETParams(PIPPETParams):
+    sigma_tempo = attr.ib(default=0.0)
+    mean0 = attr.ib(default=[0,1])
+    var0 = attr.ib(default=np.array([[0.0001, 0], [0, 0.04]]))
+
+class PATIPPET(PIPPET):
+    ''' Phase (And Tempo) Inference from Point Process Event Timing '''
+
+    def prepare(self, clear_state=True):
+        ''' Initialise agent based on current parameter set '''
+
+        # Most of the initialisation is the same as PIPPET, other than 2D suff. stats
+        super().prepare(clear_state=False)
+
+        if clear_state:
+            self.xbar_s = np.zeros((2, self.n_ts))
+            self.xbar_s[:,0] = self.p.mean0
+            self.Sigma_s = np.zeros((2, 2, self.n_ts))
+            self.Sigma_s[:,:,0] = self.p.var0
 
     def _lambda_i(self, xbar, Sigma, i):
         gauss = norm.pdf(xbar[0], loc=self.p.e_means[i], scale=(self.p.e_vars[i] + Sigma[0,0])**0.5)
@@ -119,20 +216,25 @@ class PATIPPET(object):
 
         return Sigma_sum/self._lambda_hat(xbar_prev, Sigma)
 
-    def _between_events(self, xbar_prev, Sigma_prev):
+    def _between_events(self, xbar_prev, Sigma_prev, drift=True):
         ''' Drift of sufficient statistics between stimulus events '''
 
         # Update mu
-        dxbar = self._x_hat(xbar_prev, Sigma_prev) - xbar_prev
-        dxbar = self._lambda_hat(xbar_prev, Sigma_prev) * dxbar
-        dxbar = self.p.dt * (np.array([xbar_prev[1], 0]) - dxbar)
+        dxbar_m = np.array([xbar_prev[1], 0])
+        dxbar = 0.
+        if drift:
+            dxbar = self._x_hat(xbar_prev, Sigma_prev) - xbar_prev
+            dxbar = self._lambda_hat(xbar_prev, Sigma_prev) * dxbar
+        dxbar = self.p.dt * (dxbar_m - dxbar)
         xbar = xbar_prev + dxbar
 
         # Update Sigma
         Sigma_m = np.array([[self.p.sigma_phase**2 + 2*Sigma_prev[0,1], Sigma_prev[1,1]],
                             [Sigma_prev[1,1], self.p.sigma_tempo**2]])
-        dSigma = self._Sigma_hat(xbar, xbar_prev, Sigma_prev) - Sigma_prev
-        dSigma = self._lambda_hat(xbar_prev, Sigma_prev) * dSigma
+        dSigma = 0.
+        if drift:
+            dSigma = self._Sigma_hat(xbar, xbar_prev, Sigma_prev) - Sigma_prev
+            dSigma = self._lambda_hat(xbar_prev, Sigma_prev) * dSigma
         dSigma = self.p.dt * (Sigma_m - dSigma)
         Sigma = Sigma_prev + dSigma
 
@@ -144,20 +246,6 @@ class PATIPPET(object):
         Sigma_next = self._Sigma_hat(xbar_next, xbar, Sigma)
         return xbar_next, Sigma_next
 
-    def _is_onset(self, t_prev, t, i=0, stimulus=True):
-        ''' Check whether event occurs between two timesteps
-
-        :param t_prev: beginning of window, exclusive (float)
-        :param t: end of window, inclusive (float)
-        :param i: search from this index in event sequence (int, default=0)
-        '''
-        es = self.p.e_times if stimulus else self.p.e_means
-        for e_i in range(i, len(es)):
-            e_t = es[e_i]
-            if t >= e_t and t_prev < e_t:
-                return True
-        return False
-
     def run(self):
         ''' Run PATIPPET over timeline/events configured in parameter set '''
         e_i = 0
@@ -166,10 +254,7 @@ class PATIPPET(object):
             Sigma_prev = self.Sigma_s[:, :, i-1]
 
             # Update for time step
-            if self._drift_between:
-                xbar, Sigma = self._between_events(xbar_prev, Sigma_prev)
-            else:
-                xbar, Sigma = xbar_prev, Sigma_prev
+            xbar, Sigma = self._between_events(xbar_prev, Sigma_prev, self._drift_between)
 
             # If event, update accordingly
             t_prev, t = self.ts[i-1], self.ts[i]
@@ -188,6 +273,9 @@ class PATIPPET(object):
 if __name__ == "__main__":
     import time
 
+    '''
+    #Example: PATIPPET
+
     e_means = np.array([.25, .5, .75, 1.])
     e_vars = np.array([0.001]).repeat(len(e_means))
     e_lambdas = np.array([0.02]).repeat(len(e_means))
@@ -199,8 +287,24 @@ if __name__ == "__main__":
     overtime = 0.2
 
     kp = PATIPPETParams(e_means, e_vars, e_lambdas, e_times, lambda_0,
-                        dt, sigma_phase, sigma_tempo, overtime=overtime)
+                        dt, sigma_phase, sigma_tempo=sigma_tempo, overtime=overtime)
     kb = PATIPPET(kp, drift=True)
+    '''
+
+    #Example: PIPPET
+    e_means = np.array([.25, .5, .75, 1.])
+    e_vars = np.array([0.0001]).repeat(len(e_means))
+    e_lambdas = np.array([0.02]).repeat(len(e_means))
+    e_times = [1.]
+    lambda_0 = 0.01
+    dt = 0.001
+    sigma_phase = 0.05
+    overtime = 0.2
+
+    kp = PIPPETParams(e_means, e_vars, e_lambdas, e_times, lambda_0,
+                      dt, sigma_phase, overtime=overtime)
+    kb = PIPPET(kp, drift=True)
+
     kb.prepare()
     before = time.time()
     kb.run()

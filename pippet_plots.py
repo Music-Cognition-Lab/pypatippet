@@ -1,5 +1,5 @@
 '''
-Utilities for visualising PATIPPET simulations.
+Utilities for visualising P(AT)IPPET simulations.
 
 ----- Contact
 
@@ -10,6 +10,37 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import norm, multivariate_normal
 import seaborn as sns
+
+
+def plot_pippet_error(model, figsize=(18,12)):
+    ''' Visualise PIPPET agent's trial with contours over time
+
+    :param model: agent instance, after .run() call (PATIPPET)
+    :param figsize: tuple for width/height of figure ((int,int), default=(18,12))
+    '''
+    sns.set(style="whitegrid")
+    cs = sns.color_palette('husl', 2)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    std = 2*np.sqrt(model.V_s)
+    ax.plot(model.ts, model.phibar_s, c=cs[0])
+    ax.fill_between(model.ts, model.phibar_s-std, model.phibar_s+std, alpha=0.5, facecolor=cs[0])
+
+    # Expected events
+    for i in set(model.i_es) - set(model.i_s):
+        ax.axvline(model.ts[i], color=cs[1], alpha=0.5, linestyle='--')
+    # Actual events
+    for i in set(model.i_s):
+        ax.axvline(model.ts[i], color=cs[1], alpha=0.85, linestyle='--')
+
+    ax.set_ylabel('Phase (phi)')
+    ax.set_xlabel('Time (s)')
+
+    fig.tight_layout()
+    plt.show()
+
+    import pdb; pdb.set_trace()
 
 def plot_patippet_contours(model, n=5, figsize=(18,12), tminus1=True, max_y=2.0):
     ''' Visualise PATIPPET agent's trial with contours over time
@@ -28,7 +59,7 @@ def plot_patippet_contours(model, n=5, figsize=(18,12), tminus1=True, max_y=2.0)
     sns.set(style="whitegrid")
     sns.set_palette(sns.color_palette('Set2', 1))
     cs_stim = sns.color_palette('viridis', n)
-    cs_exp = sns.color_palette('Greys', n)
+    cs_exp = sns.color_palette('cividis', n)
 
     fig, axs = plt.subplots(2, 1, gridspec_kw={'height_ratios': [2, 1]}, figsize=figsize)
 
@@ -69,8 +100,29 @@ def plot_patippet_contours(model, n=5, figsize=(18,12), tminus1=True, max_y=2.0)
     plt.show()
 
 if __name__ == "__main__":
-    from patippet import PATIPPETParams, PATIPPET
+    from patippet import PIPPETParams, PATIPPETParams, PIPPET, PATIPPET
 
+    #Example: PIPPET
+    e_means = np.array([.25, .5, .75, 1.])
+    e_vars = np.array([0.0001]).repeat(len(e_means))
+    e_lambdas = np.array([0.02]).repeat(len(e_means))
+    e_times = [1.]
+    lambda_0 = 0.01
+    dt = 0.001
+    sigma_phase = 0.05
+    overtime = 0.2
+
+    kp = PIPPETParams(e_means, e_vars, e_lambdas, e_times, lambda_0,
+                      dt, sigma_phase, overtime=overtime)
+    kb = PIPPET(kp, drift=True)
+
+    kb.prepare()
+    kb.run()
+
+    plot_pippet_error(kb, figsize=(6,3))
+
+    #Example: PATIPPET
+    '''
     e_means = np.array([.25, .5, .75, 1.])
     e_vars = np.array([0.001]).repeat(len(e_means))
     e_lambdas = np.array([0.02]).repeat(len(e_means))
@@ -82,9 +134,11 @@ if __name__ == "__main__":
     overtime = 0.2
 
     kp = PATIPPETParams(e_means, e_vars, e_lambdas, e_times, lambda_0,
-                        dt, sigma_phase, sigma_tempo, overtime=overtime)
+                        dt, sigma_phase, sigma_tempo=sigma_tempo, overtime=overtime)
     kb = PATIPPET(kp, drift=True)
     kb.prepare()
     kb.run()
 
     plot_patippet_contours(kb, n=10, figsize=(6,3), tminus1=True)
+    '''
+
