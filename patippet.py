@@ -38,7 +38,10 @@ class PIPPETParams(object):
     sigma_phase = attr.ib()
     mean0 = attr.ib(default=0)
     var0 = attr.ib(default=0.0002)
+    eta_phi = attr.ib(default=0.0)
+    eta_e = attr.ib(default=0.0)
     overtime = attr.ib(default=0.0)
+    t0 = attr.ib(default=0.0)
 
     def __attrs_post_init__(self):
         self.N = len(self.e_means)
@@ -54,8 +57,12 @@ class PIPPET(object):
 
     def prepare(self, clear_state=True):
         ''' Initialise agent based on current parameter set '''
-        self.t_max = max(self.p.e_times) + self.p.overtime
-        self.ts = np.arange(0, self.t_max+self.p.dt, step=self.p.dt)
+
+        # Perceived event times, add some noise
+        self.e_times_p = self.p.e_times + np.random.randn(*self.p.e_times.shape) * self.p.eta_e
+
+        self.t_max = max(self.e_times_p) + self.p.overtime
+        self.ts = np.arange(self.p.t0, self.t_max+self.p.dt, step=self.p.dt)
         self.n_ts = self.ts.shape[0]
 
         # Sufficient statistics
@@ -70,6 +77,15 @@ class PIPPET(object):
         # Expected event onsets (within self.ts)
         self.i_es = []
 
+    @property
+    def template(self):
+        template = np.zeros(self.n_ts)
+        for i in range(len(self.p.e_means)):
+            pdf = norm.pdf(self.ts, loc=self.p.e_means[i], scale=(self.p.e_vars[i])**0.5)
+            template += self.p.e_lambdas[i] * pdf
+        template += self.p.lambda_0
+        return template
+
     def _is_onset(self, t_prev, t, i=0, stimulus=True):
         ''' Check whether event occurs between two timesteps
 
@@ -78,7 +94,7 @@ class PIPPET(object):
         :param i: search from this index in event sequence (int, default=0)
         :param stimulus: check stimulus, else expected means (bool, defult=True)
         '''
-        es = self.p.e_times if stimulus else self.p.e_means
+        es = self.e_times_p if stimulus else self.p.e_means
         for e_i in range(i, len(es)):
             e_t = es[e_i]
             if t >= e_t and t_prev < e_t:
@@ -117,12 +133,15 @@ class PIPPET(object):
             phibar_prev = self.phibar_s[i-1]
             V_prev = self.V_s[i-1]
 
+            # Tapping noise
+            noise = np.sqrt(self.p.dt) * self.p.eta_phi * np.random.randn()
+
             # Drift between events
             dphibar = 0
             if self._drift_between:
                 dphibar = self._lambda_hat(phibar_prev, V_prev)
                 dphibar *= (self._phi_hat(phibar_prev, V_prev) - phibar_prev)
-            phibar = phibar_prev + self.p.dt * (1 - dphibar)
+            phibar = phibar_prev + self.p.dt * (1 - dphibar) + noise
 
             dV = 0
             if self._drift_between:
@@ -309,3 +328,4 @@ if __name__ == "__main__":
     before = time.time()
     kb.run()
     print('Took {}s\n'.format(np.round(time.time() - before, 2)))
+
