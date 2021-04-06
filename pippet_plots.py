@@ -54,8 +54,35 @@ def plot_pippet_error(model, figsize=(18,12), title=None):
     fig.subplots_adjust(wspace=0, hspace=0.1)
     return fig
 
+def plot_multipippet_probs(model, modelnames=None, figsize=(8,5)):
+    ''' Visualise MultiPIPPET template plausability (probability distrib. alone)
 
-def plot_multipippet_probs(model, modelnames=None, figsize=(5,8)):
+    :param model: agent instance, after .run() call (MultiPIPPET)
+    :param modelnames: list of string labels per model ([str, ...], deafult=None)
+    :param figsize: tuple for width/height of figure ((int,int), default=(18,12))
+    '''
+    from matplotlib.ticker import FormatStrFormatter
+    sns.set(style="whitegrid")
+    csp = sns.color_palette('husl', len(model.models)+1)
+    # Rotate, seemingly makes for nicer plots
+    cs = csp[1:] + [csp[0]]
+
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    for i in range(model.p_m.shape[1]):
+        ax.plot(model.ts, model.p_m[:,i], label=modelnames[i], c=cs[i], alpha=0.75)
+    for e_t in model.models[0].p.e_times:
+        ax.axvline(e_t, color=cs[-1], alpha=0.55, linestyle='-', linewidth=2, label='Events')
+    ax.set_ylabel('Probability')
+    ax.set_xlabel('Time (s)')
+
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc='center left', bbox_to_anchor=(1, 0.5))
+
+    fig.tight_layout()
+    return fig
+
+def plot_multipippet_all(model, modelnames=None, figsize=(5,8)):
     ''' Visualise MultiPIPPET template plausability
 
     :param model: agent instance, after .run() call (MultiPIPPET)
@@ -97,7 +124,7 @@ def plot_multipippet_probs(model, modelnames=None, figsize=(5,8)):
 
     # 3. Probabilities
     for i in range(model.p_m.shape[1]):
-        ax[2].plot(model.ts, model.p_m[:,i], label=modelnames[i], c=cs[i])
+        ax[2].plot(model.ts, model.p_m[:,i], label=modelnames[i], c=cs[i], alpha=0.75)
     ax[2].set_ylabel('Probability')
     ax[2].set_xlabel('Time (s)')
     ax[2].legend()

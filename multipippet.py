@@ -76,7 +76,7 @@ class PIPPETMulti(object):
 
                 # Update p_m for each template/model
                 prev_p_m = self.p_m[i-1, j]
-                d_p_m = prev_p_m * (lambda_m/lambda_prev - 1)
+                d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * lambda_m
                 self.p_m[i, j] = prev_p_m + self.dt * (1 - d_p_m)
 
                 self.L_ms[i, j] = lambda_m
@@ -132,8 +132,8 @@ if __name__ == "__main__":
     print('Took {}s\n'.format(np.round(time.time() - before, 2)))
 
     import matplotlib.pyplot as plt
-    from pippet_plots import plot_multipippet_probs, plot_multipippet_internals
-    plot_multipippet_probs(model, modelnames)
+    from pippet_plots import plot_multipippet_all, plot_multipippet_internals
+    plot_multipippet_all(model, modelnames)
     plot_multipippet_internals(model, modelnames)
     plt.show()
 
