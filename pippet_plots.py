@@ -125,7 +125,7 @@ def plot_multipippet_internals(model, modelnames=None, figsize=(8,5)):
     fig, ax = plt.subplots(2, 1, figsize=figsize)
 
     for i in range(len(model.models)):
-        ax[0].plot(model.L_ms[:,i], label=modelnames[0], c=cs[i], alpha=0.5)
+        ax[0].plot(model.L_ms[:,i], label=modelnames[i], c=cs[i], alpha=0.5)
         ax[1].plot(np.diff(model.p_m, axis=0)[:, i]/model.dt, label=modelnames[i], c=cs[i], alpha=0.5)
     for e_i in set(model.models[0].i_s):
         for i in [0, 1]:
