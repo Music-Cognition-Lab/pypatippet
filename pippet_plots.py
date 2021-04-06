@@ -14,7 +14,7 @@ import seaborn as sns
 def plot_pippet_error(model, figsize=(18,12), title=None):
     ''' Visualise PIPPET agent's trial with contours over time
 
-    :param model: agent instance, after .run() call (PATIPPET)
+    :param model: agent instance, after .run() call (PIPPET)
     :param figsize: tuple for width/height of figure ((int,int), default=(18,12))
     '''
     from matplotlib.ticker import FormatStrFormatter
@@ -28,7 +28,7 @@ def plot_pippet_error(model, figsize=(18,12), title=None):
     ax[0].plot(model.ts, model.template)
     ax[0].set_ylabel('Expectation (λ)')
     ax[0].set_xticklabels([])
-    
+
     std = 2*np.sqrt(model.V_s)
     ax[1].plot(model.ts, model.phibar_s, c=cs[0])
     ax[1].fill_between(model.ts, model.phibar_s-std, model.phibar_s+std, alpha=0.5, facecolor=cs[0])
@@ -42,7 +42,7 @@ def plot_pippet_error(model, figsize=(18,12), title=None):
 
     ax[1].set_ylabel('Phase (Φ)')
     ax[1].set_xlabel('Time (s)')
-    
+
     handles, labels = ax[1].get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     ax[1].legend(by_label.values(), by_label.keys())
@@ -53,6 +53,90 @@ def plot_pippet_error(model, figsize=(18,12), title=None):
     fig.tight_layout()
     fig.subplots_adjust(wspace=0, hspace=0.1)
     return fig
+
+
+def plot_multipippet_probs(model, modelnames=None, figsize=(5,8)):
+    ''' Visualise MultiPIPPET template plausability
+
+    :param model: agent instance, after .run() call (MultiPIPPET)
+    :param modelnames: list of string labels per model ([str, ...], deafult=None)
+    :param figsize: tuple for width/height of figure ((int,int), default=(18,12))
+    '''
+    from matplotlib.ticker import FormatStrFormatter
+    sns.set(style="whitegrid")
+    csp = sns.color_palette('Set1', len(model.models)+1)
+    # Rotate, seemingly makes for nicer plots
+    cs = csp[1:] + [csp[0]]
+
+    figheights = [.75, 1.25, 1.25]
+    fig, ax = plt.subplots(3, 1, figsize=figsize, gridspec_kw={'height_ratios': figheights})
+
+    if not modelnames:
+        modelnames = ["Model_{}".format(i+1) for i in range(len(model.models))]
+
+    # 1. Lambda templates
+    for i in range(model.p_m.shape[1]):
+        ax[0].plot(model.models[i].ts, model.models[i].template, c=cs[i], alpha=0.5, label=modelnames[i])
+    ax[0].set_ylabel('Expectation (λ)')
+    ax[0].set_xticklabels([])
+    ax[0].legend(loc="upper left")
+    ax[0].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+
+    # 2. Phase progress
+    std = 2*np.sqrt(model.V_s)
+    ax[1].plot(model.ts, model.phibar_s, c=cs[i])
+    ax[1].fill_between(model.ts, model.phibar_s-std, model.phibar_s+std, alpha=0.5, facecolor=cs[i])
+    for e_t in model.models[0].p.e_times:
+        ax[1].axvline(e_t, color=cs[-1], alpha=0.55, linestyle='-', linewidth=2, label='Events')
+    ax[1].set_ylabel('Phase (Φ)')
+    handles, labels = ax[1].get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax[1].legend(by_label.values(), by_label.keys())
+    ax[1].yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    ax[1].set_xticklabels([])
+
+    # 3. Probabilities
+    for i in range(model.p_m.shape[1]):
+        ax[2].plot(model.ts, model.p_m[:,i], label=modelnames[i], c=cs[i])
+    ax[2].set_ylabel('Probability')
+    ax[2].set_xlabel('Time (s)')
+    ax[2].legend()
+
+    fig.tight_layout()
+    fig.subplots_adjust(wspace=0, hspace=0.1, top=0.95)
+    return fig
+
+
+def plot_multipippet_internals(model, modelnames=None, figsize=(8,5)):
+    ''' Visualise MultiPIPPET probability drift and lambadas
+
+    :param model: agent instance, after .run() call (MultiPIPPET)
+    :param modelnames: list of string labels per model ([str, ...], deafult=None)
+    :param figsize: tuple for width/height of figure ((int,int), default=(18,12))
+    '''
+    sns.set(style="whitegrid")
+    csp = sns.color_palette('Set1', len(model.models)+1)
+    # Rotate, seemingly makes for nicer plots
+    cs = csp[1:] + [csp[0]]
+
+    if not modelnames:
+        modelnames = ["Model_{}".format(i+1) for i in range(len(model.models))]
+
+    fig, ax = plt.subplots(2, 1, figsize=figsize)
+
+    for i in range(len(model.models)):
+        ax[0].plot(model.L_ms[:,i], label=modelnames[0], c=cs[i], alpha=0.5)
+        ax[1].plot(np.diff(model.p_m, axis=0)[:, i]/model.dt, label=modelnames[i], c=cs[i], alpha=0.5)
+    for e_i in set(model.models[0].i_s):
+        for i in [0, 1]:
+            ax[i].axvline(e_i, color=cs[-1], alpha=0.55, linestyle='-', linewidth=1)
+    ax[0].set_ylabel('Lambda_m')
+    ax[0].legend(loc="upper left")
+    ax[1].set_ylabel('Delta prob_m')
+    ax[1].legend(loc="upper left")
+
+    return fig
+
 
 def plot_patippet_contours(model, n=5, figsize=(18,12), tminus1=True, max_y=2.0):
     ''' Visualise PATIPPET agent's trial with contours over time
@@ -109,16 +193,17 @@ def plot_patippet_contours(model, n=5, figsize=(18,12), tminus1=True, max_y=2.0)
     axs[1].set_xlim([-0.2, None])
 
     fig.tight_layout()
-    plt.show()
+    return fig
 
 if __name__ == "__main__":
-    from patippet import PIPPETParams, PATIPPETParams, PIPPET, PATIPPET
+    from pippet import PIPPETParams,  PIPPET
+    from patippet import PATIPPETParams, PATIPPET
 
     #Example: PIPPET
     e_means = np.array([.25, .5, .75, 1.])
     e_vars = np.array([0.0001]).repeat(len(e_means))
     e_lambdas = np.array([0.01]).repeat(len(e_means))
-    e_times = [1.]
+    e_times = np.array([1.])
     lambda_0 = 0.01
     dt = 0.001
     sigma_phase = 0.05
@@ -131,27 +216,5 @@ if __name__ == "__main__":
     kb.prepare()
     kb.run()
 
-    plot_pippet_error(kb, figsize=(6,3))
-
-    #Example: PATIPPET
-    '''
-    e_means = np.array([.25, .5, .75, 1.])
-    e_vars = np.array([0.001]).repeat(len(e_means))
-    e_lambdas = np.array([0.02]).repeat(len(e_means))
-    e_times = [1.]
-    lambda_0 = 0.01
-    dt = 0.001
-    sigma_phase = 0.05
-    sigma_tempo = 0.05
-    overtime = 0.2
-
-    kp = PATIPPETParams(e_means, e_vars, e_lambdas, e_times, lambda_0,
-                        dt, sigma_phase, sigma_tempo=sigma_tempo, overtime=overtime)
-    kb = PATIPPET(kp, drift=True)
-    kb.prepare()
-    kb.run()
-
-    plot_patippet_contours(kb, n=10, figsize=(6,3), tminus1=True)
-    '''
-
-
+    fig = plot_pippet_error(kb, figsize=(6,3))
+    plt.show()
