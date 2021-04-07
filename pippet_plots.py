@@ -71,7 +71,7 @@ def plot_multipippet_probs(model, modelnames=None, figsize=(8,5)):
     for i in range(model.p_m.shape[1]):
         ax.plot(model.ts, model.p_m[:,i], label=modelnames[i], c=cs[i], alpha=0.75)
     for e_t in model.models[0].p.e_times:
-        ax.axvline(e_t, color=cs[-1], alpha=0.55, linestyle='-', linewidth=2, label='Events')
+        ax.axvline(e_t, color=cs[-1], alpha=0.25, linestyle='-', linewidth=2, label='Events')
     ax.set_ylabel('Probability')
     ax.set_xlabel('Time (s)')
 
@@ -151,12 +151,15 @@ def plot_multipippet_internals(model, modelnames=None, figsize=(8,5)):
 
     fig, ax = plt.subplots(2, 1, figsize=figsize)
 
+    for e_i in set(model.models[0].i_s):
+        for i in [0, 1]:
+            ax[i].axvline(e_i, color=cs[-1], alpha=0.25, linestyle='-', linewidth=2)
+
     for i in range(len(model.models)):
         ax[0].plot(model.L_ms[:,i], label=modelnames[i], c=cs[i], alpha=0.5)
         ax[1].plot(np.diff(model.p_m, axis=0)[:, i]/model.dt, label=modelnames[i], c=cs[i], alpha=0.5)
-    for e_i in set(model.models[0].i_s):
-        for i in [0, 1]:
-            ax[i].axvline(e_i, color=cs[-1], alpha=0.55, linestyle='-', linewidth=1)
+    ax[0].plot(model.L_s, label='Lambda', c=cs[-1], alpha=0.5)
+
     ax[0].set_ylabel('Lambda_m')
     ax[0].legend(loc="upper left")
     ax[1].set_ylabel('Delta prob_m')

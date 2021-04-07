@@ -58,13 +58,13 @@ class PIPPETMulti(object):
             self.L_ms[0, j] += lambda_m
         self.L_s[0] = np.sum(self.p_m[0] * self.L_ms[0])
 
+        phibar_ms = np.zeros(self.n_m)
+        V_ms = np.zeros(self.n_m)
+
         for i in range(1, self.n_ts):
             lambda_prev = self.L_s[i-1]
             phibar_prev = self.phibar_s[i-1]
             V_prev = self.V_s[i-1]
-
-            phibar_ms = np.zeros(self.n_m)
-            V_ms = np.zeros(self.n_m)
 
             # Single time step for each model in ensemble
             for j, m in enumerate(self.models):
@@ -76,8 +76,8 @@ class PIPPETMulti(object):
 
                 # Update p_m for each template/model
                 prev_p_m = self.p_m[i-1, j]
-                d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * lambda_m
-                self.p_m[i, j] = prev_p_m + self.dt * (1 - d_p_m)
+                d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * lambda_prev
+                self.p_m[i, j] = prev_p_m - d_p_m
 
                 self.L_ms[i, j] = lambda_m
                 phibar_ms[j] = phibar_m

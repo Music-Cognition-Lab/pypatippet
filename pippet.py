@@ -99,7 +99,7 @@ class PIPPET(object):
         es = self.e_times_p if stimulus else self.p.e_means
         for e_i in range(i, len(es)):
             e_t = es[e_i]
-            if t >= e_t and t_prev < e_t:
+            if t >= e_t and t_prev <= e_t:
                 return True
         return False
 
