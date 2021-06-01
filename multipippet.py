@@ -68,16 +68,21 @@ class PIPPETMulti(object):
 
             # Single time step for each model in ensemble
             for j, m in enumerate(self.models):
+                prev_count = m.e_i
                 if self._ensemble:
                     phibar_m, V_m = m.step(i)
                 else:
                     phibar_m, V_m = m.step(i, phibar_prev, V_prev)
-                lambda_m = m.lambda_hat(phibar_m, V_m)
+                lambda_m = m.lambda_hat(phibar_m, V_m, o=0)#len(m.i_es))
+                is_event = prev_count is not m.e_i
 
                 # Update p_m for each template/model
                 prev_p_m = self.p_m[i-1, j]
-                d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * lambda_prev
-                self.p_m[i, j] = prev_p_m - d_p_m
+                if is_event:
+                    d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * (1 - lambda_prev)
+                else:
+                    d_p_m = prev_p_m * (lambda_m/lambda_prev - 1) * -self.dt * lambda_prev
+                self.p_m[i, j] = prev_p_m + d_p_m
 
                 self.L_ms[i, j] = lambda_m
                 phibar_ms[j] = phibar_m

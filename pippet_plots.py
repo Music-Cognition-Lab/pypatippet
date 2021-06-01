@@ -157,7 +157,7 @@ def plot_multipippet_internals(model, modelnames=None, figsize=(8,5)):
 
     for i in range(len(model.models)):
         ax[0].plot(model.L_ms[:,i], label=modelnames[i], c=cs[i], alpha=0.5)
-        ax[1].plot(np.diff(model.p_m, axis=0)[:, i]/model.dt, label=modelnames[i], c=cs[i], alpha=0.5)
+        ax[1].plot(np.diff(model.p_m, axis=0)[:, i], label=modelnames[i], c=cs[i], alpha=0.5)
     ax[0].plot(model.L_s, label='Lambda', c=cs[-1], alpha=0.5)
 
     ax[0].set_ylabel('Lambda_m')

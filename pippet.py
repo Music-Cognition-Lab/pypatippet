@@ -109,12 +109,12 @@ class PIPPET(object):
     def K_i(self, V):
         return 1/(1/V + 1/self.p.e_vars)
 
-    def lambda_i(self, phibar, V):
-        gauss = norm.pdf(phibar, loc=self.p.e_means, scale=(self.p.e_vars + V)**0.5)
-        return self.p.e_lambdas * gauss
+    def lambda_i(self, phibar, V, o=0):
+        gauss = norm.pdf(phibar, loc=self.p.e_means[o:], scale=(self.p.e_vars[o:] + V)**0.5)
+        return self.p.e_lambdas[o:] * gauss
 
-    def lambda_hat(self, phibar, V):
-        return self.p.lambda_0 + np.sum(self.lambda_i(phibar, V))
+    def lambda_hat(self, phibar, V, o=0):
+        return self.p.lambda_0 + np.sum(self.lambda_i(phibar, V, o=o))
 
     def phi_hat(self, phibar, V):
         phi_hat = self.p.lambda_0 * phibar
